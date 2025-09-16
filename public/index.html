@@ -1,16 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <title>Peek preview</title>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light dark" />
+  
   <link href="github-markdown.min.css" rel="stylesheet" />
   <link href="katex.min.css" rel="stylesheet" />
   <link href="style.css" rel="stylesheet" />
-</head>
+  
+  <script>
+    function initializeTheme() {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      function updateTheme(e) {
+        document.body.setAttribute('data-theme', e.matches ? 'dark' : 'light');
+      }
+      updateTheme(mediaQuery);
+      mediaQuery.addEventListener('change', updateTheme);
+      window.addEventListener('unload', () => {
+        mediaQuery.removeEventListener('change', updateTheme);
+      });
+    }
 
-<body class="peek-body" data-theme="dark">
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeTheme);
+    } else {
+      initializeTheme();
+    }
+  </script>
+</head>
+<body class="peek-body">
   <base id="peek-base" />
   <main id="peek-markdown-body" class="markdown-body">
     <div class="peek-loader"></div>
@@ -19,5 +39,4 @@
   <script src="mermaid.min.js"></script>
   <script src="script.bundle.js"></script>
 </body>
-
 </html>

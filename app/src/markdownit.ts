@@ -99,16 +99,37 @@ md.renderer.rules.math_block_eqno = (() => {
 md.renderer.rules.fence = (() => {
   const fence = md.renderer.rules.fence!;
   const escapeHtml = md.utils.escapeHtml;
-  const regex = new RegExp(
-    /^(?<frontmatter>---[\s\S]+---)?\s*(?<content>(?<charttype>flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram|pie|journey|C4Context|erDiagram|requirementDiagram|gitGraph)[\s\S]+)/,
+  const mermaidRegex = new RegExp(
+    /^(?<frontmatter>---[\s\S]+---)?\s*(?<content>(?<charttype>graph|flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram|pie|journey|C4Context|erDiagram|requirementDiagram|gitGraph)[\s\S]+)/,
   );
+  const plantumlRegex = /^@start[a-z]+[\s\S]*@end[a-z]+$/;
 
   return (tokens, idx, options, env, self) => {
     const token = tokens[idx];
     const content = token.content.trim();
+    const info = token.info?.trim().toLowerCase();
 
-    if (regex.test(content)) {
-      const match = regex.exec(content);
+    // Check for PlantUML content
+    if (info === 'plantuml' || plantumlRegex.test(content)) {
+      return `
+        <div
+          class="peek-plantuml-container"
+          data-line-begin="${token.attrGet('data-line-begin')}"
+        >
+          <div
+            id="graph-plantuml-${env.genId(hashCode(content))}"
+            data-graph="plantuml"
+            data-plantuml-content="${escapeHtml(content)}"
+          >
+            <div class="peek-loader"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Check for Mermaid content
+    if (info === 'mermaid' || mermaidRegex.test(content)) {
+      const match = mermaidRegex.exec(content);
       return `
         <div
           class="peek-mermaid-container"

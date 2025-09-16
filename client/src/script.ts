@@ -3,6 +3,8 @@ import { slidingWindows } from 'https://deno.land/std@0.217.0/collections/slidin
 // @deno-types="https://raw.githubusercontent.com/patrick-steele-idem/morphdom/master/index.d.ts"
 import morphdom from 'https://esm.sh/morphdom@2.7.2?no-dts';
 import mermaid from './mermaid.ts';
+import plantuml from './plantuml.ts';
+import { createDiagramRenderer, DIAGRAM_CONFIGS } from './diagram-renderer.ts';
 
 const window = globalThis;
 // const _log = Reflect.get(window, '_log');
@@ -142,63 +144,65 @@ addEventListener('DOMContentLoaded', () => {
   const onPreview = (() => {
     mermaid.init();
 
+    const parser = new DOMParser();
+
+    // Create diagram renderers using the common utility
     const renderMermaid = debounce(
-      (() => {
-        const parser = new DOMParser();
-
-        async function render(el: Element) {
-          const svg = await mermaid.render(
-            `${el.id}-svg`,
-            el.getAttribute('data-graph-definition')!,
-            el,
-          );
-
-          if (svg) {
-            const svgElement = parser.parseFromString(svg, 'text/html').body;
-            el.appendChild(svgElement);
-            el.parentElement?.style.setProperty(
-              'height',
-              window.getComputedStyle(svgElement).getPropertyValue('height'),
-            );
-          }
-        }
-
-        return () => {
-          Array.from(markdownBody.querySelectorAll('div[data-graph="mermaid"]'))
-            .filter((el) => !el.querySelector('svg'))
-            .forEach(render);
-        };
-      })(),
-      200,
+      createDiagramRenderer(mermaid, DIAGRAM_CONFIGS.mermaid, parser),
+      200
     );
+
+    const renderPlantUML = debounce(
+      createDiagramRenderer(plantuml, DIAGRAM_CONFIGS.plantuml, parser),
+      200
+    );
+
+    // Map diagram types to their render functions
+    const diagramRenderers: Record<string, () => void> = {
+      mermaid: renderMermaid,
+      plantuml: renderPlantUML,
+    };
 
     const morphdomOptions: Parameters<typeof morphdom>[2] = {
       childrenOnly: true,
       getNodeKey: (node) => {
-        if (node instanceof HTMLElement && node.getAttribute('data-graph') === 'mermaid') {
-          return node.id;
+        if (node instanceof HTMLElement) {
+          const graph = node.getAttribute('data-graph');
+          if (graph && graph in diagramRenderers) {
+            return node.id;
+          }
         }
         return null;
       },
       onNodeAdded: (node) => {
-        if (node instanceof HTMLElement && node.getAttribute('data-graph') === 'mermaid') {
-          renderMermaid();
+        if (node instanceof HTMLElement) {
+          const graph = node.getAttribute('data-graph');
+          if (graph && graph in diagramRenderers) {
+            diagramRenderers[graph]();
+          }
         }
         return node;
       },
       onBeforeElUpdated: (fromEl: HTMLElement, toEl: HTMLElement) => {
         if (fromEl.hasAttribute('open')) {
           toEl.setAttribute('open', 'true');
-        } else if (
-          fromEl.classList.contains('peek-mermaid-container') &&
-          toEl.classList.contains('peek-mermaid-container')
-        ) {
-          toEl.style.height = fromEl.style.height;
+        } else {
+          // Check if both elements are diagram containers of the same type
+          const diagramTypes = Object.keys(DIAGRAM_CONFIGS);
+          for (const type of diagramTypes) {
+            const containerClass = DIAGRAM_CONFIGS[type as keyof typeof DIAGRAM_CONFIGS].containerClass;
+            if (fromEl.classList.contains(containerClass) &&
+                toEl.classList.contains(containerClass)) {
+              toEl.style.height = fromEl.style.height;
+              break;
+            }
+          }
         }
         return !fromEl.isEqualNode(toEl);
       },
       onBeforeElChildrenUpdated(_, toEl) {
-        return toEl.getAttribute('data-graph') !== 'mermaid';
+        const graph = toEl.getAttribute('data-graph');
+        return !(graph && graph in diagramRenderers);
       },
     };
 
